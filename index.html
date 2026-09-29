@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Crowd Density & Lift Monitoring</title>
+    <style>
+        :root {
+            --bg-color: #0b1120;
+            --surface-color: #1e293b;
+            --surface-border: #334155;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --accent-blue: #38bdf8;
+            --status-normal: #10b981;
+            --status-warning: #ef4444;
+            --warning-bg: rgba(239, 68, 68, 0.16);
+            --normal-bg: rgba(16, 185, 129, 0.16);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px 10px;
+        }
+
+        .mobile-container {
+            width: 100%;
+            max-width: 480px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* Top Bar */
+        .app-bar {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border: 1px solid var(--surface-border);
+            border-radius: 14px;
+            padding: 12px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+
+        .brand-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .brand-icon {
+            width: 36px;
+            height: 36px;
+            background: #2563eb;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.4);
+        }
+
+        .brand-info h1 {
+            font-size: 0.98rem;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: -0.2px;
+        }
+
+        .brand-info .server-label {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: var(--status-normal);
+            box-shadow: 0 0 8px var(--status-normal);
+            animation: pulse-dot 2s infinite;
+        }
+
+        .status-dot.offline {
+            background-color: var(--status-warning);
+            box-shadow: 0 0 8px var(--status-warning);
+            animation: none;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.25); opacity: 0.6; }
+        }
+
+        .top-btn {
+            background: rgba(56, 189, 248, 0.15);
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            color: var(--accent-blue);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 0.78rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s;
+        }
+
+        .top-btn:active {
+            transform: scale(0.95);
+            background: rgba(56, 189, 248, 0.3);
+        }
+
+        /* Video Feed Section */
+        .video-box {
+            background: #000;
+            border: 1px solid var(--surface-border);
+            border-radius: 14px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 4px 18px rgba(0, 0, 0, 0.4);
+            aspect-ratio: 4 / 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .video-player {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+
+        .live-chip {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(239, 68, 68, 0.9);
+            color: #ffffff;
+            font-size: 0.68rem;
+            font-weight: 800;
+            padding: 3px 8px;
+            border-radius: 6px;
+            letter-spacing: 0.6px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            backdrop-filter: blur(4px);
+        }
+
+        .live-chip::before {
+            content: "";
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: #fff;
+            animation: pulse-dot 1.5s infinite;
+        }
+
+        .fps-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(15, 23, 42, 0.75);
+            color: #e2e8f0;
+            font-size: 0.68rem;
+            font-weight: 600;
+            padding: 3px 8px;
+            border-radius: 6px;
+            backdrop-filter: blur(4px);
+        }
+
+        /* Video Disconnect Overlay */
+        .video-disconnect-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(11, 17, 32, 0.92);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .video-disconnect-overlay.visible {
+            display: flex;
+        }
+
+        .disconnect-icon {
+            font-size: 2.2rem;
+            margin-bottom: 8px;
+        }
+
+        .disconnect-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: #ffffff;
+            margin-bottom: 4px;
+        }
+
+        .disconnect-desc {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            margin-bottom: 14px;
+            line-height: 1.3;
+            max-width: 280px;
+        }
+
+        .reconnect-timer {
+            font-size: 0.75rem;
+            color: var(--accent-blue);
+            margin-top: 8px;
+            font-weight: 600;
+        }
+
+        /* Visual Warning Banner */
+        .warning-banner {
+            display: none;
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.28) 0%, rgba(185, 28, 28, 0.4) 100%);
+            border: 2px solid var(--status-warning);
+            border-radius: 12px;
+            padding: 12px 14px;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 4px 20px rgba(239, 68, 68, 0.45);
+            animation: shake 0.6s ease;
+        }
+
+        .warning-banner.active {
+            display: flex;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-4px); }
+            40%, 80% { transform: translateX(4px); }
+        }
+
+        .warning-icon {
+            font-size: 1.8rem;
+            animation: bounce 1s infinite;
+            flex-shrink: 0;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-3px); }
+        }
+
+        .warning-text h3 {
+            font-size: 0.92rem;
+            font-weight: 800;
+            color: #fecaca;
+        }
+
+        .warning-text p {
+            font-size: 0.75rem;
+            color: #fca5a5;
+            line-height: 1.3;
+        }
+
+        /* Metrics Row */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+
+        .stat-card {
+            background: var(--surface-color);
+            border: 1px solid var(--surface-border);
+            border-radius: 12px;
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+        }
+
+        .stat-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .stat-value-group {
+            display: flex;
+            align-items: baseline;
+            gap: 4px;
+        }
+
+        .stat-value {
+            font-size: 2.1rem;
+            font-weight: 800;
+            line-height: 1;
+            color: #ffffff;
+        }
+
+        .stat-unit {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .people-stat .stat-value {
+            color: var(--accent-blue);
+        }
+
+        /* Status Card */
+        .status-container {
+            background: var(--surface-color);
+            border: 1px solid var(--surface-border);
+            border-radius: 12px;
+            padding: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+        }
+
+        .status-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.72rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 10px 16px;
+            border-radius: 8px;
+            font-size: 1.15rem;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+
+        .status-pill.normal {
+            background: var(--normal-bg);
+            border: 1.5px solid var(--status-normal);
+            color: var(--status-normal);
+        }
+
+        .status-pill.over-capacity {
+            background: var(--warning-bg);
+            border: 1.5px solid var(--status-warning);
+            color: var(--status-warning);
+            animation: pulse-warning 1s infinite alternate;
+        }
+
+        @keyframes pulse-warning {
+            0% {
+                box-shadow: 0 0 10px rgba(239, 68, 68, 0.35);
+                transform: scale(1);
+            }
+            100% {
+                box-shadow: 0 0 22px rgba(239, 68, 68, 0.75);
+                transform: scale(1.02);
+            }
+        }
+
+        /* Main Action Button */
+        .action-container {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .primary-action-btn {
+            background: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 12px 16px;
+            font-size: 0.88rem;
+            font-weight: 700;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s;
+            box-shadow: 0 3px 12px rgba(37, 99, 235, 0.35);
+        }
+
+        .primary-action-btn:active {
+            transform: scale(0.97);
+            background: #1d4ed8;
+        }
+
+        .server-config-row {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+
+        .server-url-badge {
+            color: var(--accent-blue);
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="mobile-container">
+        <!-- App Bar -->
+        <header class="app-bar">
+            <div class="brand-group">
+                <div class="brand-icon">🛗</div>
+                <div class="brand-info">
+                    <h1>Crowd Density &amp; Lift Monitoring</h1>
+                    <div class="server-label">
+                        <span id="connDot" class="status-dot"></span>
+                        <span id="connText">Connected (Live)</span>
+                    </div>
+                </div>
+            </div>
+            <button id="btnHeaderRefresh" class="top-btn" title="Refresh Live Stream">
+                🔄 Refresh
+            </button>
+        </header>
+
+        <!-- Live Camera Stream -->
+        <div class="video-box">
+            <div class="live-chip">LIVE FEED</div>
+            <div id="streamEndpointBadge" class="fps-badge">/video_feed</div>
+            
+            <img id="cameraStream" class="video-player" alt="Live YOLO Video Feed">
+
+            <!-- Disconnection Overlay with Countdown -->
+            <div id="disconnectOverlay" class="video-disconnect-overlay">
+                <div class="disconnect-icon">⚠️</div>
+                <div class="disconnect-title">Video Feed Disconnected</div>
+                <div class="disconnect-desc">Connection to YOLO stream lost. Reconnecting automatically...</div>
+                <button id="btnOverlayReconnect" class="primary-action-btn" style="max-width: 190px;">
+                    🔄 Reconnect Now
+                </button>
+                <div id="reconnectTimerText" class="reconnect-timer">Auto-retrying in 3s...</div>
+            </div>
+        </div>
+
+        <!-- Over Capacity Warning Banner (Shown only when count > 10) -->
+        <div id="warningBanner" class="warning-banner">
+            <div class="warning-icon">🚨</div>
+            <div class="warning-text">
+                <h3>OVER CAPACITY WARNING!</h3>
+                <p>Lift maximum capacity (10 people) exceeded. Alarm is sounding. Please wait for the next lift.</p>
+            </div>
+        </div>
+
+        <!-- Metric Stat Cards -->
+        <div class="metrics-grid">
+            <!-- Current Count Card -->
+            <div class="stat-card people-stat">
+                <div class="stat-header">
+                    <span>People Count</span>
+                    <span>👥</span>
+                </div>
+                <div class="stat-value-group">
+                    <span id="valCount" class="stat-value">0</span>
+                    <span class="stat-unit">detected</span>
+                </div>
+            </div>
+
+            <!-- Maximum Capacity Card (Fixed at 10) -->
+            <div class="stat-card">
+                <div class="stat-header">
+                    <span>Max Capacity</span>
+                    <span>🛗</span>
+                </div>
+                <div class="stat-value-group">
+                    <span id="valCapacity" class="stat-value">10</span>
+                    <span class="stat-unit">people</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Capacity Status Card -->
+        <div class="status-container">
+            <div class="status-header">
+                <span>Lift Capacity Status</span>
+                <span id="statusClock">Updated: Just now</span>
+            </div>
+            <div id="statusPill" class="status-pill normal">
+                NORMAL
+            </div>
+        </div>
+
+        <!-- Main Refresh Action -->
+        <div class="action-container">
+            <button id="btnMainRefresh" class="primary-action-btn">
+                🔄 Refresh Live Feed &amp; Reconnect
+            </button>
+            <div class="server-config-row">
+                <span>Backend:</span>
+                <span id="serverUrlDisplay" class="server-url-badge" title="Click to change server IP">http://192.168.29.38:5000</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Default target backend URL specified by user
+        const DEFAULT_BACKEND = 'http://192.168.29.38:5000';
+        const MAX_CAPACITY = 10;
+
+        // Resolve Backend URL: Prefer stored preference or current host if running from Flask
+        let backendUrl = localStorage.getItem('crowd_backend_url');
+        if (!backendUrl) {
+            if (window.location.protocol.startsWith('http') && window.location.port === '5000') {
+                backendUrl = window.location.origin;
+            } else {
+                backendUrl = DEFAULT_BACKEND;
+            }
+        }
+        if (backendUrl.endsWith('/')) backendUrl = backendUrl.slice(0, -1);
+
+        // Elements
+        const cameraStream = document.getElementById('cameraStream');
+        const disconnectOverlay = document.getElementById('disconnectOverlay');
+        const reconnectTimerText = document.getElementById('reconnectTimerText');
+        const connDot = document.getElementById('connDot');
+        const connText = document.getElementById('connText');
+        const valCount = document.getElementById('valCount');
+        const valCapacity = document.getElementById('valCapacity');
+        const statusPill = document.getElementById('statusPill');
+        const warningBanner = document.getElementById('warningBanner');
+        const statusClock = document.getElementById('statusClock');
+        const serverUrlDisplay = document.getElementById('serverUrlDisplay');
+
+        serverUrlDisplay.textContent = backendUrl;
+
+        let autoRetryTimer = null;
+        let countdownSec = 3;
+        let isReconnecting = false;
+        let audioCtx = null;
+        let lastBeepTime = 0;
+        let failureStreak = 0;
+
+        // Sound alert fallback for mobile devices
+        function triggerAlertBeep() {
+            const now = Date.now();
+            if (now - lastBeepTime < 1000) return;
+            lastBeepTime = now;
+            try {
+                if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(1500, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.6);
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.6);
+            } catch (e) {}
+        }
+
+        // Connect the /video_feed stream
+        function startVideoStream() {
+            disconnectOverlay.classList.remove('visible');
+            if (autoRetryTimer) {
+                clearInterval(autoRetryTimer);
+                autoRetryTimer = null;
+            }
+            // Use /video_feed endpoint as requested
+            const streamUrl = backendUrl + '/video_feed?t=' + Date.now();
+            cameraStream.src = streamUrl;
+        }
+
+        // Handle video feed error / disconnection
+        function onStreamDisconnected() {
+            if (disconnectOverlay.classList.contains('visible')) return;
+            disconnectOverlay.classList.add('visible');
+            setOnlineIndicator(false);
+
+            // Automatic reconnection countdown
+            countdownSec = 3;
+            reconnectTimerText.textContent = `Auto-retrying in ${countdownSec}s...`;
+            if (autoRetryTimer) clearInterval(autoRetryTimer);
+            autoRetryTimer = setInterval(() => {
+                countdownSec--;
+                if (countdownSec <= 0) {
+                    clearInterval(autoRetryTimer);
+                    autoRetryTimer = null;
+                    reconnectFeed();
+                } else {
+                    reconnectTimerText.textContent = `Auto-retrying in ${countdownSec}s...`;
+                }
+            }, 1000);
+        }
+
+        // Manual or automatic reconnect
+        function reconnectFeed() {
+            setOnlineIndicator(false, 'Reconnecting...');
+            startVideoStream();
+            fetchCount();
+        }
+
+        cameraStream.addEventListener('error', onStreamDisconnected);
+
+        // Fetch /count from Flask backend
+        async function fetchCount() {
+            try {
+                const response = await fetch(backendUrl + '/count', { cache: 'no-store' });
+                if (!response.ok) throw new Error('HTTP ' + response.status);
+
+                const data = await response.json();
+                failureStreak = 0;
+                setOnlineIndicator(true);
+
+                const count = (data.people_count !== undefined && data.people_count !== null) ? Number(data.people_count) : 0;
+                const capacity = Number(data.capacity) || MAX_CAPACITY;
+                const isOver = count > capacity || data.status === 'OVER CAPACITY';
+
+                valCount.textContent = count;
+                valCapacity.textContent = capacity;
+
+                const now = new Date();
+                statusClock.textContent = 'Updated: ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+                if (isOver) {
+                    statusPill.textContent = 'OVER CAPACITY';
+                    statusPill.className = 'status-pill over-capacity';
+                    warningBanner.classList.add('active');
+                    triggerAlertBeep();
+                } else {
+                    statusPill.textContent = 'NORMAL';
+                    statusPill.className = 'status-pill normal';
+                    warningBanner.classList.remove('active');
+                }
+            } catch (err) {
+                failureStreak++;
+                if (failureStreak >= 3) {
+                    setOnlineIndicator(false);
+                    onStreamDisconnected();
+                }
+            }
+        }
+
+        function setOnlineIndicator(isOnline, text) {
+            if (isOnline) {
+                connDot.className = 'status-dot';
+                connText.textContent = text || 'Connected (Live)';
+            } else {
+                connDot.className = 'status-dot offline';
+                connText.textContent = text || 'Offline / Reconnecting';
+            }
+        }
+
+        // Change Server IP on click
+        serverUrlDisplay.addEventListener('click', () => {
+            const current = backendUrl;
+            const input = prompt('Enter Flask Backend URL:', current);
+            if (input && input.trim()) {
+                let formatted = input.trim();
+                if (!formatted.startsWith('http://') && !formatted.startsWith('https://')) {
+                    formatted = 'http://' + formatted;
+                }
+                if (formatted.endsWith('/')) formatted = formatted.slice(0, -1);
+                backendUrl = formatted;
+                localStorage.setItem('crowd_backend_url', backendUrl);
+                serverUrlDisplay.textContent = backendUrl;
+                reconnectFeed();
+            }
+        });
+
+        // Button Event Listeners
+        document.getElementById('btnHeaderRefresh').addEventListener('click', reconnectFeed);
+        document.getElementById('btnMainRefresh').addEventListener('click', reconnectFeed);
+        document.getElementById('btnOverlayReconnect').addEventListener('click', reconnectFeed);
+
+        // Initial Start
+        startVideoStream();
+        fetchCount();
+        setInterval(fetchCount, 800);
+    </script>
+</body>
+</html>
